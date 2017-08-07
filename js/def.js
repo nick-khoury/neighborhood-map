@@ -1,9 +1,10 @@
-var places = [["Minneapolis", "MN", "USA"], ["New York", "NY", "USA"], ["San Francisco", "CA", "USA"], ["Los Angeles", "CA", "USA"], ["Indianapolis", "IN", "USA"], ["Dallas", "TX", "USA"]];
-
-function mapLoc(city, state, country) {
+var places = [["Minneapolis", "MN", "USA"], ["Cincinnati", "OH", "USA"], ["Portland", "OR", "USA"], ["Indianapolis", "IN", "USA"], ["Dallas", "TX", "USA"]];
+var found = [];
+function mapLoc(city, state, country, weather) {
     this.city = ko.observable(city);
     this.state = ko.observable(state);
     this.country = ko.observable(country);
+    this.weather = ko.observable(weather);
 }
 
 function model() {
@@ -38,7 +39,7 @@ function model() {
 
 function setLocations() {
 	for (var i = 0; i < places.length; ++i) {
-		locModel.mapLocs.push(new mapLoc(places[i][0], places[i][1], places[i][2]));
+		locModel.mapLocs.push(new mapLoc(places[i][0], places[i][1], places[i][2], ""));
 	}
 }
 
@@ -61,7 +62,7 @@ function initializeMap(locationList) {
     var locations = [];
   
     locationList.forEach(function (place) {
-		locations.push(place[0] + ", " + place[1]);
+		locations.push([place[0] + ", " + place[1], place[3]]);
 	});
 
     return locations;
@@ -73,13 +74,22 @@ function initializeMap(locationList) {
   about a single location.
   */
   function createMapMarker(placeData) {
-
+	//console.log(placeData.formatted_address.split(", ")[0].replace(" ", ""), placeData.formatted_address.split(", ")[1]);
     // The next lines save location data from the search result object to local variables
     var lat = placeData.geometry.location.lat();  // latitude from the place service
     var lon = placeData.geometry.location.lng();  // longitude from the place service
     var name = placeData.formatted_address;   // name of the place from the place service
     var bounds = window.mapBounds;            // current boundaries of the map window
 
+
+	var url = "http://api.wunderground.com/api/8b2bf4a9a6f86794/conditions/q/" + placeData.formatted_address.split(", ")[1] + "/" + placeData.formatted_address.split(", ")[0].replace(" ", "") + ".json";	
+	$.getJSON(url, function(data) {
+		$( "body" ).append( "<p>In " + name + ", it is " + data.current_observation.temp_f + " deg. F.</p>" );
+	}).error(function(e){
+		$( "body" ).append( "<p>failure " + name + " has no weather data</p>" );
+	});
+	
+	
     // marker is an object with additional data about the pin for a single location
     var marker = new google.maps.Marker({
       map: map,
@@ -89,17 +99,20 @@ function initializeMap(locationList) {
     
     marker.addListener('click', toggleBounce);
     
-      function toggleBounce() {
-        if (marker.getAnimation() !== null) {
-          marker.setAnimation(null);
-        } else {
-          marker.setAnimation(google.maps.Animation.BOUNCE);
-        }
-      }
+	function toggleBounce() {
+	  if (marker.getAnimation() !== null) {
+	    marker.setAnimation(null);
+	  } else {
+	    marker.setAnimation(google.maps.Animation.BOUNCE);
+	  }
+	}
+
+
 
     // infoWindows are the little helper windows that open when you click
     // or hover over a pin on a map. They usually contain more information
     // about a location.
+
     var infoWindow = new google.maps.InfoWindow({
       content: name
     });
@@ -127,7 +140,11 @@ function initializeMap(locationList) {
   */
   function callback(results, status) {
     if (status == google.maps.places.PlacesServiceStatus.OK) {
-      createMapMarker(results[0]);
+		//console.log(results[0].name);
+		if (found.indexOf(results[0].name) < 0){
+			found.push(results[0].name);
+			createMapMarker(results[0]);
+		}
     }
   }
 
@@ -142,10 +159,10 @@ function initializeMap(locationList) {
     var service = new google.maps.places.PlacesService(map);
 
     // Iterates through the array of locations, creates a search object for each location
-      locations.forEach(function(place){
+    locations.forEach(function(place){
       // the search request object
       var request = {
-        query: place
+        query: place[0]
       };
 
       // Actually searches the Google Maps API for location data and runs the callback
@@ -153,6 +170,7 @@ function initializeMap(locationList) {
       service.textSearch(request, callback);
     });
   }
+
 
   // Sets the boundaries of the map based on pin locations
   window.mapBounds = new google.maps.LatLngBounds();
